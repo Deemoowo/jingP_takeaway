@@ -21,6 +21,9 @@ mybatis:
     #开启驼峰命名
     map-underscore-to-camel-case: true
 
+mybatis-plus:
+  type-aliases-package: com.sky.entity
+
 logging:
   level:
     com:
