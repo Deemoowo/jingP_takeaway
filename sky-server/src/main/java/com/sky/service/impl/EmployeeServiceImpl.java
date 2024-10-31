@@ -118,6 +118,9 @@ public class EmployeeServiceImpl implements EmployeeService {
         UpdateWrapper<Employee> updateWrapper = new UpdateWrapper<>();
         updateWrapper.eq("id", id);
 
+        employee.setUpdateTime(LocalDateTime.now());
+        employee.setUpdateUser(BaseContext.getCurrentId());
+
         employeeMapper.update(employee, updateWrapper);
     }
 

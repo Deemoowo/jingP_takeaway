@@ -1,5 +1,6 @@
 package com.sky.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
 import com.sky.constant.MessageConstant;
@@ -8,12 +9,14 @@ import com.sky.context.BaseContext;
 import com.sky.dto.CategoryDTO;
 import com.sky.dto.CategoryPageQueryDTO;
 import com.sky.entity.Category;
+import com.sky.entity.Dish;
 import com.sky.exception.DeletionNotAllowedException;
 import com.sky.mapper.CategoryMapper;
 import com.sky.mapper.DishMapper;
 import com.sky.mapper.SetmealMapper;
 import com.sky.result.PageResult;
 import com.sky.service.CategoryService;
+import com.sky.service.DishService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +37,9 @@ public class CategoryServiceImpl implements CategoryService {
     private DishMapper dishMapper;
     @Autowired
     private SetmealMapper setmealMapper;
+
+    @Autowired
+    private DishService dishService;
 
     /**
      * 新增分类
@@ -119,6 +125,18 @@ public class CategoryServiceImpl implements CategoryService {
                 .updateUser(BaseContext.getCurrentId())
                 .build();
         categoryMapper.update(category);
+
+        if (status == StatusConstant.DISABLE) {
+            // 如果禁用分类，那么当前分类下对应的菜品也会被停售
+            QueryWrapper<Dish> wrapper = new QueryWrapper<>();
+            wrapper.eq("category_id", id);
+            List<Dish> dishList = dishMapper.selectList(wrapper);
+            if (dishList != null && dishList.size() > 0) {
+                for (Dish dish : dishList) {
+                    dishService.startOrStop(StatusConstant.DISABLE, dish.getId());
+                }
+            }
+        }
     }
 
     /**

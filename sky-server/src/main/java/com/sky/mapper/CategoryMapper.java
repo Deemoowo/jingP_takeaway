@@ -1,5 +1,6 @@
 package com.sky.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.github.pagehelper.Page;
 import com.sky.annotation.AutoFill;
 import com.sky.enumeration.OperationType;
@@ -11,7 +12,7 @@ import org.apache.ibatis.annotations.Mapper;
 import java.util.List;
 
 @Mapper
-public interface CategoryMapper {
+public interface CategoryMapper extends BaseMapper<Category> {
 
     /**
      * 插入数据
@@ -21,7 +22,7 @@ public interface CategoryMapper {
             " VALUES" +
             " (#{type}, #{name}, #{sort}, #{status}, #{createTime}, #{updateTime}, #{createUser}, #{updateUser})")
     @AutoFill(value = OperationType.INSERT)
-    void insert(Category category);
+    int insert(Category category);
 
     /**
      * 分页查询

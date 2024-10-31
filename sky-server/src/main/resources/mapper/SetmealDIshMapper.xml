@@ -5,5 +5,18 @@
     <select id="getByDishId" resultType="java.lang.Long">
         select setmeal_id from setmeal_dish where dish_id = #{dishId}
     </select>
+    <insert id="insertBatch" parameterType="list">
+        INSERT into setmeal_dish (setmeal_id,dish_id,name,price,copies) VALUES
+        <foreach collection="setmealDishes" item="setmealDish" separator=",">
+            (#{setmealDish.setmealId},#{setmealDish.dishId},#{setmealDish.name},#{setmealDish.price},#{setmealDish.copies})
+        </foreach>
+    </insert>
+    <delete id="deleteBySetmealIds">
+        delete from setmeal_dish where setmeal_id in
+        <foreach collection="setmealIds" item="setmealId" open="(" close=")" separator=",">
+            #{setmealId}
+        </foreach>
+
+    </delete>
 
 </mapper>
