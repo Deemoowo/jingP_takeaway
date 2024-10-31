@@ -11,3 +11,7 @@ sky:
     access-key-id: LTAI5tAcSpFEhtjsoLfe1GR3
     access-key-secret: BWmHXJCUOUIMzMgkNA4XLnVkh2yEvj
     bucket-name: web-deemo
+  redis:
+    host: localhost
+    port: 6379
+    database: 10
