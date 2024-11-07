@@ -10,6 +10,8 @@ import com.sky.vo.DishVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Select;
 
+import java.util.List;
+
 @Mapper
 public interface DishMapper extends BaseMapper<Dish> {
 
@@ -25,4 +27,11 @@ public interface DishMapper extends BaseMapper<Dish> {
     int insert(Dish entity);
 
     Page<DishVO> pageQuery(DishPageQueryDTO dishPageQueryDTO);
+
+    /**
+     * 动态条件查询菜品
+     * @param dish
+     * @return
+     */
+    List<Dish> list(Dish dish);
 }
