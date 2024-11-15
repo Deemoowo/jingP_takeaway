@@ -48,12 +48,8 @@ public class OrderController {
     @ApiOperation("订单支付")
     public Result<OrderPaymentVO> payment(@RequestBody OrdersPaymentDTO ordersPaymentDTO) throws Exception {
         log.info("订单支付：{}", ordersPaymentDTO);
-//        OrderPaymentVO orderPaymentVO = orderService.payment(ordersPaymentDTO);
-//        log.info("生成预支付交易单：{}", orderPaymentVO);
-        OrderPaymentVO orderPaymentVO = OrderPaymentVO.builder().nonceStr("94123172860079869972517395812792")
-                .paySign("prepay_id=wx07104240042328a34b4652a71855300000")
-                .timeStamp(String.valueOf(System.currentTimeMillis()))
-                .signType("RSA").packageStr("hYWQ16oTClsQh/5jdhxwwzh3EoEq6r9V/WrzrC9aRHLN0a6n2mMUmbw0J").build();
+        OrderPaymentVO orderPaymentVO = orderService.payment(ordersPaymentDTO);
+        log.info("生成预支付交易单：{}", orderPaymentVO);
         return Result.success(orderPaymentVO);
     }
 
@@ -108,6 +104,19 @@ public class OrderController {
     public Result repetition(@PathVariable("id") Long id){
         log.info("再来一单:{}",id);
         orderService.repetition(id);
+        return Result.success();
+    }
+
+    /**
+     * 用户催单
+     *
+     * @param id
+     * @return
+     */
+    @GetMapping("/reminder/{id}")
+    @ApiOperation("用户催单")
+    public Result reminder(@PathVariable("id") Long id) {
+        orderService.reminder(id);
         return Result.success();
     }
 }

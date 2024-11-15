@@ -1,9 +1,11 @@
 package com.sky.service.impl;
 
+import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
 import com.sky.constant.MessageConstant;
+import com.sky.constant.WebSocketSentType;
 import com.sky.context.BaseContext;
 import com.sky.dto.*;
 import com.sky.entity.*;
@@ -19,6 +21,7 @@ import com.sky.vo.OrderPaymentVO;
 import com.sky.vo.OrderStatisticsVO;
 import com.sky.vo.OrderSubmitVO;
 import com.sky.vo.OrderVO;
+import com.sky.webSocket.WebSocketServer;
 import org.aspectj.weaver.ast.Or;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,7 +33,9 @@ import org.springframework.util.CollectionUtils;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -52,6 +57,8 @@ public class OrderServiceImpl implements OrderService {
     private WeChatPayUtil weChatPayUtil;
     @Autowired
     private ShoppingCartService shoppingCartService;
+    @Autowired
+    private WebSocketServer webSocketServer;
     /**
      * 用户下单
      * @param ordersSubmitDTO
@@ -119,21 +126,40 @@ public class OrderServiceImpl implements OrderService {
         User user = userMapper.selectById(userId);
 
         //调用微信支付接口，生成预支付交易单
-        JSONObject jsonObject = weChatPayUtil.pay(
-                ordersPaymentDTO.getOrderNumber(), //商户订单号
-                new BigDecimal(0.01), //支付金额，单位 元
-                "苍穹外卖订单", //商品描述
-                user.getOpenid() //微信用户的openid
-        );
+//        JSONObject jsonObject = weChatPayUtil.pay(
+//                ordersPaymentDTO.getOrderNumber(), //商户订单号
+//                new BigDecimal(0.01), //支付金额，单位 元
+//                "苍穹外卖订单", //商品描述
+//                user.getOpenid() //微信用户的openid
+//        );
+//
+//        if (jsonObject.getString("code") != null && jsonObject.getString("code").equals("ORDERPAID")) {
+//            throw new OrderBusinessException("该订单已支付");
+//        }
+//
+//        OrderPaymentVO vo = jsonObject.toJavaObject(OrderPaymentVO.class);
+//        vo.setPackageStr(jsonObject.getString("package"));
+//
+//        return vo;
 
-        if (jsonObject.getString("code") != null && jsonObject.getString("code").equals("ORDERPAID")) {
-            throw new OrderBusinessException("该订单已支付");
-        }
+        paySuccess(ordersPaymentDTO.getOrderNumber());
 
+        String orderNumber = ordersPaymentDTO.getOrderNumber(); //订单号
+        Long orderId = orderMapper.getOrderId(orderNumber);//根据订单号查主键
+
+        JSONObject jsonObject = new JSONObject();//本来没有2
+        jsonObject.put("code", "ORDERPAID"); //本来没有3
         OrderPaymentVO vo = jsonObject.toJavaObject(OrderPaymentVO.class);
         vo.setPackageStr(jsonObject.getString("package"));
 
-        return vo;
+        //为替代微信支付成功后的数据库订单状态更新，多定义一个方法进行修改
+        Integer OrderPaidStatus = Orders.PAID; //支付状态，已支付
+        Integer OrderStatus = Orders.TO_BE_CONFIRMED; //订单状态，待接单
+        //发现没有将支付时间 check_out属性赋值，所以在这里更新
+        LocalDateTime check_out_time = LocalDateTime.now();
+
+        orderMapper.updateStatus(OrderStatus, OrderPaidStatus, check_out_time, orderId);
+        return vo;  //  修改支付方法中的代码
     }
 
     /**
@@ -155,6 +181,15 @@ public class OrderServiceImpl implements OrderService {
                 .build();
 
         orderMapper.update(orders);
+
+        //通哥websocket向客户端浏览器推送消息
+        Map map = new HashMap();
+        map.put("type", WebSocketSentType.NOTIFY_OF_ORDER);
+        map.put("orderId", ordersDB.getId());
+        map.put("content", "订单号:" + outTradeNo);
+
+        String json = JSON.toJSONString(map);
+        webSocketServer.sendToAllClient(json);
     }
 
     /**
@@ -361,7 +396,7 @@ public class OrderServiceImpl implements OrderService {
         orders.setStatus(Orders.CANCELLED);
         orders.setRejectionReason(ordersRejectionDTO.getRejectionReason());
         //调用微信支付退款接口
-//        Integer payStatus = ordersDB.getPayStatus();
+        Integer payStatus = ordersDB.getPayStatus();
 //        if (payStatus == Orders.PAID) {
 //            //用户已支付，需要退款
 //            String refund = weChatPayUtil.refund(
@@ -373,7 +408,8 @@ public class OrderServiceImpl implements OrderService {
 //        }
 
         //支付状态修改为 退款
-        orders.setPayStatus(Orders.REFUND);
+        if (payStatus == Orders.PAID)
+            orders.setPayStatus(Orders.REFUND);
         orders.setCancelTime(LocalDateTime.now());
         orderMapper.update(orders);
     }
@@ -384,11 +420,11 @@ public class OrderServiceImpl implements OrderService {
      */
     public void cancel4Admin(OrdersCancelDTO ordersCancelDTO) {
         // 根据id查询订单
-//        Orders ordersDB = orderMapper.selectById(ordersCancelDTO.getId());
+        Orders ordersDB = orderMapper.selectById(ordersCancelDTO.getId());
 
         //支付状态
-//        Integer payStatus = ordersDB.getPayStatus();
-//        if (payStatus == 1) {
+        Integer payStatus = ordersDB.getPayStatus();
+//        if (payStatus == Orders.PAID) {
 //            //用户已支付，需要退款
 //            String refund = weChatPayUtil.refund(
 //                    ordersDB.getNumber(),
@@ -400,6 +436,8 @@ public class OrderServiceImpl implements OrderService {
         Orders orders = new Orders();
         orders.setId(ordersCancelDTO.getId());
         orders.setStatus(Orders.CANCELLED);
+        if (payStatus == Orders.PAID)
+            orders.setPayStatus(Orders.REFUND);
         orders.setCancelReason(ordersCancelDTO.getCancelReason());
         orders.setCancelTime(LocalDateTime.now());
         orderMapper.update(orders);
@@ -433,5 +471,24 @@ public class OrderServiceImpl implements OrderService {
         orders.setId(id);
         orders.setStatus(Orders.COMPLETED);
         orderMapper.update(orders);
+    }
+
+    /**
+     * 催单
+     * @param id
+     */
+    public void reminder(Long id) {
+        Orders ordersDB = orderMapper.selectById(id);
+        if(ordersDB == null || ordersDB.getStatus() != Orders.TO_BE_CONFIRMED){
+            throw new OrderBusinessException(MessageConstant.ORDER_STATUS_ERROR);
+        }
+
+        Map map = new HashMap();
+        map.put("type", WebSocketSentType.NOTICE_BY_USER);
+        map.put("orderId", ordersDB.getId());
+        map.put("content", "订单号:" + ordersDB.getNumber());
+
+        String json = JSON.toJSONString(map);
+        webSocketServer.sendToAllClient(json);
     }
 }
